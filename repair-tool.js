@@ -1,8 +1,10 @@
 var $MENUENTRY;
 var $MENUNUMBER;
+var $EMBEDROW;
 var $ICON = chrome.extension.getURL("icon/16.png");
 
-var $BADREGEX = new RegExp("twitch.tv/(.+)/c/(.+)", "i")
+var $BADREGEX = new RegExp("twitch.tv/(.+)/c/(.+)", "i");
+var $GOODREGEX = new RegExp("twitch.tv/(.+)/v/(.+)", "i");
 
 $(document).ready(function()
 {
@@ -44,24 +46,31 @@ function fixVideo(btn)
 				$.get('https://api.twitch.tv/kraken/channels/' + username + '/videos?limit=100',
 					processTwitchVODs.bind(window, rundate, [], function(candidates)
 					{
+						$('#fixer-button').remove();
+						if (!candidates.length) return;
+
 						candidates.sort(function(a,b)
 						{
 							var adur = moment.duration(a.length, 'seconds');
 							var bdur = moment.duration(b.length, 'seconds');
-							return Math.abs(adur.subtract(runtime).milliseconds()) - Math.abs(bdur.subtract(runtime).milliseconds());
+
+							var adiff = Math.abs(adur.subtract(runtime).asMilliseconds());
+							var bdiff = Math.abs(bdur.subtract(runtime).asMilliseconds());
+							return adiff - bdiff;
 						});
 
 						var selobj = $('<select>').attr('name', 'video');
 						for (var i = 0; i < candidates.length; ++i)
 							selobj.append($('<option>').attr('value', candidates[i].url).text(candidates[i].title));
+
 						input.replaceWith(selobj);
+						selobj.change();
 					}),
 					'json');
 			},
 			'jsonp');
 		}
 	});
-	$('#fixer-button').remove();
 }
 
 function processTwitchVODs(compare, candidates, callback, data)
@@ -78,8 +87,22 @@ function processTwitchVODs(compare, candidates, callback, data)
 	else callback(candidates);
 }
 
+$(document).on('change', 'select[name="video"]', function()
+{
+	if ($EMBEDROW) $EMBEDROW.remove();
+	var row = $(this).closest('tr');
+
+	var id = $(this).val().match($GOODREGEX)[2];
+	var video = $('<iframe class="twitch" src="https://player.twitch.tv/?video=v'
+		+ id + '&amp;autoplay=false" allowfullscreen=""></iframe>');
+
+	$EMBEDROW = $('<tr>').append($('<td colspan="2">').append($('<div>').addClass('embed centered').append(video)));
+	row.after($EMBEDROW);
+})
+
 function checkRows()
 {
+	addIconCounter(0);
 	$('.linked[data-target^="/run/"]').removeClass('twitchfix-broken');
 	nextRow(0, $('.linked[data-target^="/run/"]').toArray());
 }
@@ -111,8 +134,11 @@ function nextRow(count, rest)
 		},
 		'jsonp');
 	}
-	else nextRow(count, rest)
+	else nextRow(count, rest);
 }
+
+$(document).on('click', '.categoriesnav a', function()
+{ addIconCounter(0); });
 
 function addIconCounter(x)
 {
